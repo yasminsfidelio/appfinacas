@@ -37,10 +37,18 @@ export interface Recurring {
   scope: Scope
   kind: Kind
   description: string
+  /** em contas variáveis é só a estimativa; o valor do mês fica em recurring_values */
   amount: number
+  variable: boolean
   category: string
   due_day: number
   start_month: string
+}
+
+export interface RecurringValue {
+  recurring_id: string
+  ref_month: string
+  amount: number
 }
 
 export interface Budget {
@@ -127,6 +135,19 @@ export function useRecurring() {
     queryKey: ['recurring'],
     queryFn: async () => {
       const rows = unwrap(await supabase.from('recurring').select('*').order('due_day')) as Recurring[]
+      return rows.map((r) => ({ ...r, amount: Number(r.amount) }))
+    },
+  })
+}
+
+/** Valores definidos para as contas variáveis no mês. */
+export function useRecurringValues(month: string) {
+  return useQuery({
+    queryKey: ['recurring_values', month],
+    queryFn: async () => {
+      const rows = unwrap(
+        await supabase.from('recurring_values').select('*').eq('ref_month', monthStart(month)),
+      ) as RecurringValue[]
       return rows.map((r) => ({ ...r, amount: Number(r.amount) }))
     },
   })
@@ -229,10 +250,21 @@ export const useDeleteRecurring = () =>
     unwrap(await supabase.from('recurring').delete().eq('id', id)),
   )
 
+const setRecurringValue = async (rec: Recurring, month: string, amount: number) =>
+  unwrap(await supabase.from('recurring_values').upsert({ recurring_id: rec.id, ref_month: monthStart(month), amount }))
+
+/** Define quanto veio a conta variável neste mês, sem marcar como paga. */
+export const useSetRecurringValue = () =>
+  useWrite(['recurring_values'], ({ rec, month, amount }: { rec: Recurring; month: string; amount: number }) =>
+    setRecurringValue(rec, month, amount),
+  )
+
 /** Marca a conta fixa como paga/recebida no mês, criando o lançamento correspondente. */
 export const usePayRecurring = () =>
-  useWrite(['tx'], async ({ rec, month, amount, date }: { rec: Recurring; month: string; amount: number; date: string }) =>
-    unwrap(
+  useWrite(['tx', 'recurring_values'], async ({ rec, month, amount, date }: { rec: Recurring; month: string; amount: number; date: string }) => {
+    // guarda o valor do mês para ele não se perder se o pagamento for desfeito
+    if (rec.variable) await setRecurringValue(rec, month, amount)
+    return unwrap(
       await supabase.from('transactions').insert({
         scope: rec.scope,
         kind: rec.kind,
@@ -243,8 +275,8 @@ export const usePayRecurring = () =>
         recurring_id: rec.id,
         ref_month: monthStart(month),
       }),
-    ),
-  )
+    )
+  })
 
 export const useSaveBudget = () =>
   useWrite(['budgets'], async ({ id, scope, category, amount }: { id?: string; scope: Scope; category: string; amount: number }) =>

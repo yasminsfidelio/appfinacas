@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Check, Plus } from 'lucide-react'
-import { useDeleteRecurring, useDeleteTx, usePayRecurring, useSaveRecurring, type Recurring } from '../lib/api'
+import { useDeleteRecurring, useDeleteTx, usePayRecurring, useSaveRecurring, useSetRecurringValue, type Recurring } from '../lib/api'
 import { firstName, useApp } from '../lib/ctx'
 import { useMonthData, type FixedItem } from '../lib/month'
-import { category, categoriesFor, currentMonth, dateInMonth, money, monthStart, shortDate, today, type Kind, type Scope } from '../lib/util'
+import { category, categoriesFor, currentMonth, dateInMonth, money, monthLabel, monthStart, shortDate, today, type Kind, type Scope } from '../lib/util'
 import { CategoryPicker, ScopePicker } from '../components/TxSheet'
 import { Button, Card, CategoryIcon, ConfirmButton, Empty, ErrorNote, Field, MoneyInput, Progress, Segmented, Sheet, TextInput } from '../components/ui'
 
@@ -67,7 +67,7 @@ export function Fixed() {
 }
 
 function FixedRow({ item, month, onToggle, onEdit }: { item: FixedItem; month: string; onToggle: () => void; onEdit: () => void }) {
-  const { rec, paid } = item
+  const { rec, paid, needsValue } = item
   const cat = category(rec.category)
   const income = rec.kind === 'income'
   const late = !paid && !income && dateInMonth(month, rec.due_day) < today()
@@ -90,10 +90,18 @@ function FixedRow({ item, month, onToggle, onEdit }: { item: FixedItem; month: s
           <span className={`block truncate font-medium ${paid ? 'text-muted line-through' : ''}`}>{rec.description}</span>
           <span className={`block truncate text-xs ${late ? 'font-semibold text-bad' : 'text-muted'}`}>
             {paid ? `${income ? 'Recebida' : 'Paga'} em ${shortDate(paid.date)}` : `${late ? 'Venceu' : income ? 'Entra' : 'Vence'} dia ${rec.due_day}`}
+            {rec.variable && ' · variável'}
           </span>
         </span>
-        <span className={`tabular shrink-0 font-semibold ${income ? 'text-good' : ''}`}>{money(paid?.amount ?? rec.amount)}</span>
+        {!needsValue && (
+          <span className={`tabular shrink-0 font-semibold ${income ? 'text-good' : ''}`}>{money(paid?.amount ?? item.amount)}</span>
+        )}
       </button>
+      {needsValue && (
+        <button onClick={onToggle} className="shrink-0 rounded-full bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent">
+          Definir valor
+        </button>
+      )}
     </div>
   )
 }
@@ -102,9 +110,10 @@ function PaySheet({ item, onClose }: { item: FixedItem; onClose: () => void }) {
   const { month, members, userId } = useApp()
   const { rec, paid } = item
   const pay = usePayRecurring()
+  const setValue = useSetRecurringValue()
   const undo = useDeleteTx()
   const income = rec.kind === 'income'
-  const [amount, setAmount] = useState(rec.amount)
+  const [amount, setAmount] = useState(item.needsValue ? 0 : item.amount)
   const [date, setDate] = useState(month === currentMonth() ? today() : dateInMonth(month, rec.due_day))
 
   if (paid) {
@@ -140,15 +149,32 @@ function PaySheet({ item, onClose }: { item: FixedItem; onClose: () => void }) {
   return (
     <Sheet title={rec.description} onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
-        <p className="text-sm text-muted">Se o valor veio diferente neste mês, ajuste aqui.</p>
-        <MoneyInput value={amount} onChange={setAmount} large />
+        <p className="text-sm text-muted">
+          {rec.variable
+            ? `Quanto veio em ${monthLabel(month).toLowerCase()}?${rec.amount > 0 ? ` Estimativa: ${money(rec.amount)}.` : ''}`
+            : 'Se o valor veio diferente neste mês, ajuste aqui.'}
+        </p>
+        <MoneyInput value={amount} onChange={setAmount} autoFocus={item.needsValue} large />
         <Field label={income ? 'Recebida em' : 'Paga em'}>
           <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
         </Field>
-        <ErrorNote error={pay.error} />
+        <ErrorNote error={pay.error ?? setValue.error} />
         <Button type="submit" disabled={amount <= 0 || pay.isPending}>
           {income ? 'Marcar como recebida' : 'Marcar como paga'}
         </Button>
+        {rec.variable && (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={amount <= 0 || setValue.isPending}
+            onClick={async () => {
+              await setValue.mutateAsync({ rec, month, amount })
+              onClose()
+            }}
+          >
+            {income ? 'Só salvar o valor (ainda não recebi)' : 'Só salvar o valor (ainda não paguei)'}
+          </Button>
+        )}
       </form>
     </Sheet>
   )
@@ -161,6 +187,7 @@ function RecurringSheet({ rec, onClose }: { rec?: Recurring; onClose: () => void
   const [kind, setKind] = useState<Kind>(rec?.kind ?? 'expense')
   const [description, setDescription] = useState(rec?.description ?? '')
   const [amount, setAmount] = useState(rec?.amount ?? 0)
+  const [variable, setVariable] = useState(rec?.variable ?? false)
   const [cat, setCat] = useState(rec?.category ?? '')
   const [dueDay, setDueDay] = useState(String(rec?.due_day ?? 10))
   const [scope, setScope] = useState<Scope>(rec?.scope ?? app.scope)
@@ -168,7 +195,7 @@ function RecurringSheet({ rec, onClose }: { rec?: Recurring; onClose: () => void
   const cats = categoriesFor(kind)
   const categoryKey = cats.some((c) => c.key === cat) ? cat : ''
   const day = Number(dueDay)
-  const valid = description.trim() !== '' && amount > 0 && categoryKey !== '' && day >= 1 && day <= 31
+  const valid = description.trim() !== '' && (amount > 0 || variable) && categoryKey !== '' && day >= 1 && day <= 31
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -179,6 +206,7 @@ function RecurringSheet({ rec, onClose }: { rec?: Recurring; onClose: () => void
       scope,
       description: description.trim(),
       amount,
+      variable,
       category: categoryKey,
       due_day: day,
       ...(rec ? {} : { start_month: monthStart(app.month) }),
@@ -206,8 +234,23 @@ function RecurringSheet({ rec, onClose }: { rec?: Recurring; onClose: () => void
             autoFocus={!rec}
           />
         </Field>
+        <Field label="O valor muda de um mês para o outro?">
+          <Segmented
+            value={variable ? 'variable' : 'fixed'}
+            onChange={(v) => setVariable(v === 'variable')}
+            options={[
+              { value: 'fixed', label: 'Valor fixo' },
+              { value: 'variable', label: 'Valor variável' },
+            ]}
+          />
+        </Field>
+        {variable && (
+          <p className="-mt-2 text-sm text-muted">
+            Ideal para luz, água e gás: a conta volta todo mês e você define o valor quando a fatura chegar.
+          </p>
+        )}
         <div className="grid grid-cols-[1fr_7rem] gap-3">
-          <Field label="Valor mensal">
+          <Field label={variable ? 'Estimativa (opcional)' : 'Valor mensal'}>
             <MoneyInput value={amount} onChange={setAmount} />
           </Field>
           <Field label={kind === 'income' ? 'Dia que entra' : 'Vence dia'}>
