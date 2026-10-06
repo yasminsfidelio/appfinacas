@@ -1,0 +1,124 @@
+@import 'tailwindcss';
+
+:root {
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --surface-2: #eceeea;
+  --line: #e1e4de;
+  --ink: #17201c;
+  --muted: #6b756f;
+  --good: #0f8a5f;
+  --bad: #c8402f;
+  --warn: #b7791f;
+  /* acento muda conforme o modo: Nosso (verde) / Meu (índigo) */
+  --accent: #0f9d7a;
+  --accent-soft: #dff3ec;
+  --on-accent: #ffffff;
+}
+
+[data-scope='personal'] {
+  --accent: #5b5bd6;
+  --accent-soft: #e8e8fb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101412;
+    --surface: #1a201d;
+    --surface-2: #242b27;
+    --line: #2d3531;
+    --ink: #eef2ef;
+    --muted: #96a29b;
+    --good: #3ecf8e;
+    --bad: #ff7b6b;
+    --warn: #e5b454;
+    --accent: #2bbf98;
+    --accent-soft: #17352d;
+    --on-accent: #06221a;
+  }
+  [data-scope='personal'] {
+    --accent: #8f8ff5;
+    --accent-soft: #26264a;
+    --on-accent: #12122e;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --font-sans: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  /* 16px evita o zoom automático do iOS ao focar */
+  font-size: 16px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-sheet {
+  animation: sheet-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.animate-fade {
+  animation: fade-in 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet,
+  .animate-fade {
+    animation: none;
+  }
+}
