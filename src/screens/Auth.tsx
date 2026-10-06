@@ -28,13 +28,18 @@ export function Auth() {
         : await supabase.auth.signUp({ email, password, options: { data: { name: name.trim() } } })
     setBusy(false)
     if (res.error) setError(new Error(MESSAGES[res.error.message] ?? res.error.message))
+    // o Supabase não avisa que o e-mail já existe: devolve um usuário sem identidades
+    else if (mode === 'up' && res.data.user?.identities?.length === 0) setError(new Error(MESSAGES['User already registered']))
     else if (!res.data.session) setNotice('Conta criada! Abra o link de confirmação que enviamos para o seu e-mail e depois entre.')
   }
 
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col justify-center px-6 py-10">
       <div className="mb-8 text-center">
-        <img src="/icon.svg" alt="" className="mx-auto size-16 rounded-2xl" />
+        <svg viewBox="0 0 512 512" aria-hidden="true" className="mx-auto size-16 rounded-2xl bg-accent">
+          <circle cx="206" cy="256" r="104" fill="#fff" fillOpacity="0.95" />
+          <circle cx="306" cy="256" r="104" fill="#000" fillOpacity="0.25" />
+        </svg>
         <h1 className="mt-4 text-2xl font-bold">Nós Dois</h1>
         <p className="mt-1 text-muted">As finanças do casal, sem planilha.</p>
       </div>

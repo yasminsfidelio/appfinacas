@@ -3,6 +3,7 @@ import { Copy } from 'lucide-react'
 import { useRename } from '../lib/api'
 import { firstName, useApp } from '../lib/ctx'
 import { supabase } from '../lib/supabase'
+import { applyTheme, readTheme, THEMES, type Theme } from '../lib/theme'
 import { Button, ErrorNote, Field, Sheet, TextInput } from '../components/ui'
 
 export function Settings({ onClose }: { onClose: () => void }) {
@@ -11,6 +12,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(profile.name)
   const [home, setHome] = useState(household.name)
   const [copied, setCopied] = useState(false)
+  const [theme, setTheme] = useState<Theme>(readTheme)
   const partner = members.find((m) => m.id !== userId)
   const dirty = name.trim() !== profile.name || home.trim() !== household.name
 
@@ -33,6 +35,27 @@ export function Settings({ onClose }: { onClose: () => void }) {
         </Field>
         <Field label="Nome da casa">
           <TextInput value={home} onChange={(e) => setHome(e.target.value)} maxLength={40} />
+        </Field>
+        <Field label="Cor do app (neste aparelho)">
+          <div className="grid grid-cols-2 gap-2">
+            {THEMES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={theme === t.id}
+                onClick={() => {
+                  applyTheme(t.id)
+                  setTheme(t.id)
+                }}
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-3 text-sm font-semibold ${
+                  theme === t.id ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
+                }`}
+              >
+                <span className="size-5 shrink-0 rounded-full border border-line" style={{ background: t.color }} />
+                {t.label}
+              </button>
+            ))}
+          </div>
         </Field>
         {dirty && (
           <Button onClick={save} disabled={rename.isPending}>
